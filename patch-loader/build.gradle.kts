@@ -35,7 +35,7 @@ androidComponents.onVariants { variant ->
         dependsOn("assemble$variantCapped")
         from(
             fileTree(
-                "dir" to "$buildDir/intermediates/merged_native_libs/${variant.name}/out/lib",
+                "dir" to "$buildDir/intermediates/stripped_native_libs/${variant.name}/out/lib",
                 "include" to listOf("**/liblspatch.so")
             )
         )
@@ -60,5 +60,5 @@ dependencies {
     implementation(projects.share.android)
     implementation(projects.share.java)
 
-    implementation("com.google.code.gson:gson:2.9.0")
+    implementation("com.google.code.gson:gson:2.9.1")
 }

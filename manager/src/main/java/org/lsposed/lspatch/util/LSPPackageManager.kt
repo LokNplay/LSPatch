@@ -21,13 +21,10 @@ import org.lsposed.lspatch.Constants.PATCH_FILE_SUFFIX
 import org.lsposed.lspatch.config.ConfigManager
 import org.lsposed.lspatch.config.Configs
 import org.lsposed.lspatch.lspApp
-import org.lsposed.patch.util.ManifestParser
 import java.io.File
 import java.io.IOException
 import java.text.Collator
 import java.util.*
-import java.util.concurrent.CountDownLatch
-import java.util.zip.ZipFile
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
 
@@ -102,15 +99,12 @@ object LSPPackageManager {
                     }
                     var result: Intent? = null
                     suspendCoroutine { cont ->
-                        val countDownLatch = CountDownLatch(1)
                         val adapter = IntentSenderHelper.IIntentSenderAdaptor { intent ->
                             result = intent
-                            countDownLatch.countDown()
+                            cont.resume(Unit)
                         }
                         val intentSender = IntentSenderHelper.newIntentSender(adapter)
                         session.commit(intentSender)
-                        countDownLatch.await()
-                        cont.resume(Unit)
                     }
                     result?.let {
                         status = it.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE)
@@ -132,15 +126,12 @@ object LSPPackageManager {
             runCatching {
                 var result: Intent? = null
                 suspendCoroutine { cont ->
-                    val countDownLatch = CountDownLatch(1)
                     val adapter = IntentSenderHelper.IIntentSenderAdaptor { intent ->
                         result = intent
-                        countDownLatch.countDown()
+                        cont.resume(Unit)
                     }
                     val intentSender = IntentSenderHelper.newIntentSender(adapter)
                     ShizukuApi.uninstallPackage(packageName, intentSender)
-                    countDownLatch.await()
-                    cont.resume(Unit)
                 }
                 result?.let {
                     status = it.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE)
@@ -157,9 +148,8 @@ object LSPPackageManager {
     suspend fun getAppInfoFromApks(apks: List<Uri>): Result<AppInfo> {
         return withContext(Dispatchers.IO) {
             runCatching {
-                val app = ApplicationInfo()
-                if (apks.size > 1) app.splitSourceDirs = Array<String?>(apks.size - 1) { null }
-                apks.forEachIndexed { index, uri ->
+                var primary: ApplicationInfo? = null
+                val splits = apks.mapNotNull { uri ->
                     val src = DocumentFile.fromSingleUri(lspApp, uri)
                         ?: throw IOException("DocumentFile is null")
                     val dst = lspApp.tmpApkDir.resolve(src.name!!)
@@ -170,21 +160,18 @@ object LSPPackageManager {
                             input.copyTo(output)
                         }
                     }
-                    ZipFile(dst).use { zip ->
-                        val entry = zip.getEntry("AndroidManifest.xml")
-                            ?: throw IOException("AndroidManifest.xml is not found")
-                        zip.getInputStream(entry).use {
-                            val info = ManifestParser.parseManifestFile(it)
-                            if (app.packageName != null && app.packageName != info.packageName) {
-                                throw IOException("Selected apks are not of the same app")
-                            }
-                            app.packageName = info.packageName
-                        }
+                    if (primary == null) {
+                        primary = lspApp.packageManager.getPackageArchiveInfo(dst.absolutePath, 0)?.applicationInfo
+                        if (primary != null) return@mapNotNull null
                     }
-                    if (index == 0) app.sourceDir = dst.absolutePath
-                    else app.splitSourceDirs[index - 1] = dst.absolutePath
+                    dst.absolutePath
                 }
-                AppInfo(app, app.packageName)
+
+                // TODO: Check selected apks are from the same app
+                if (primary == null) throw IllegalArgumentException("No primary apk")
+                val label = lspApp.packageManager.getApplicationLabel(primary!!).toString()
+                if (splits.isNotEmpty()) primary!!.splitSourceDirs = splits.toTypedArray()
+                AppInfo(primary!!, label)
             }.recoverCatching { t ->
                 cleanTmpApkDir()
                 Log.e(TAG, "Failed to load apks", t)
