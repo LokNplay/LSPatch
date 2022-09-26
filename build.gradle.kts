@@ -15,8 +15,8 @@ buildscript {
         mavenCentral()
     }
     dependencies {
-        classpath("org.eclipse.jgit:org.eclipse.jgit:6.0.0.202111291000-r")
-        classpath(kotlin("gradle-plugin", version = "1.7.0"))
+        classpath("org.eclipse.jgit:org.eclipse.jgit:6.3.0.202209071007-r")
+        classpath(kotlin("gradle-plugin", version = "1.7.10"))
     }
 }
 
@@ -46,7 +46,7 @@ val coreVerName by extra(
 val androidMinSdkVersion by extra(28)
 val androidTargetSdkVersion by extra(33)
 val androidCompileSdkVersion by extra(33)
-val androidCompileNdkVersion by extra("25.0.8775105")
+val androidCompileNdkVersion by extra("25.1.8937393")
 val androidBuildToolsVersion by extra("32.0.0")
 val androidSourceCompatibility by extra(JavaVersion.VERSION_11)
 val androidTargetCompatibility by extra(JavaVersion.VERSION_11)
